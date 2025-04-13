@@ -1,0 +1,2767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device=width, initial-scale=1.0">
+    <title>上海二手房数据可视化 - 科幻风</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Orbitron', sans-serif;
+            background: linear-gradient(180deg, #0a0a2a, #1a1a4a);
+            color: #e0f7ff;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #container {
+            height: 100vh;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #map {
+            height: 50vh;
+            width: 100%;
+            background: rgba(10, 20, 60, 0.7);
+            border-bottom: 2px solid #00d4ff;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+        }
+        #charts-container {
+            height: 50vh;
+            width: 100%;
+            overflow-y: auto;
+            background: rgba(10, 20, 60, 0.7);
+        }
+        .chart-item {
+            height: 300px;
+            margin: 20px;
+            border: 2px solid #00d4ff;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+            background: rgba(0, 20, 60, 0.9);
+            position: relative;
+        }
+        .chart-title {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0, 183, 235, 0.2);
+            border-bottom: 1px solid #00d4ff;
+            color: #e0f7ff;
+            font-size: 16px;
+        }
+        .info {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            background: rgba(10, 20, 60, 0.7);
+            padding: 15px;
+            border: 2px solid #00d4ff;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+            z-index: 1000;
+            color: #e0f7ff;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+        }
+        .upload {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+        .upload input {
+            padding: 5px;
+            background: rgba(10, 20, 60, 0.7);
+            border: 1px solid #00d4ff;
+            color: #e0f7ff;
+            border-radius: 5px;
+        }
+        select {
+            background: rgba(10, 20, 60, 0.7);
+            border: 1px solid #00d4ff;
+            color: #e0f7ff;
+            padding: 5px;
+            border-radius: 5px;
+            font-family: 'Orbitron', sans-serif;
+            cursor: pointer;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        .stats-panel {
+            position: absolute;
+            top: 20px;  /* 从 80px 改为 20px，与文件上传按钮同高 */
+            right: 20px;
+            width: 300px;
+            max-height: calc(100vh - 40px); /* 相应调整最大高度，从 100px 改为 40px */
+            background: rgba(10, 20, 60, 0.7);
+            border: 2px solid #00d4ff;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+            overflow: hidden;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            display: flex;        /* 添加弹性布局 */
+            flex-direction: column; /* 垂直方向布局 */
+        }
+        .stats-title {
+            padding: 10px;
+            text-align: center;
+            background: rgba(0, 183, 235, 0.2);
+            border-bottom: 1px solid #00d4ff;
+            color: #e0f7ff;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .stats-content {
+            flex: 1;           /* 自动填充剩余空间 */
+            overflow-y: auto;  /* 启用垂直滚动 */
+            padding-right: 5px; /* 为滚动条留出空间 */
+        }
+        .stats-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .stats-content::-webkit-scrollbar-track {
+            background: rgba(0, 20, 60, 0.3);
+            border-radius: 3px;
+        }
+        .stats-content::-webkit-scrollbar-thumb {
+            background: rgba(0, 212, 255, 0.5);
+            border-radius: 3px;
+        }
+        .stats-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 212, 255, 0.8);
+        }
+        .stats-item {
+            padding: 15px;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+            color: #e0f7ff;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+        .stats-item.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .stats-item .label {
+            color: #00d4ff;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .stats-item .value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+        }
+        .stats-group {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+            padding-bottom: 10px; /* 添加底部间距 */
+        }
+        
+        .stats-group.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .stats-group .stats-item {
+            opacity: 1;
+            transform: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="upload">
+        <input type="file" id="csvFile" accept=".csv" />
+    </div>
+    <div id="container">
+        <div id="map"></div>
+        <div class="stats-panel">
+            <div class="stats-title">数据亮点</div>
+            <div class="stats-content" id="statsContent">
+            </div>
+        </div>
+        <div id="charts-container">
+            <div class="chart-item">
+                <div class="chart-title">平均建筑面积</div>
+                <div id="area-chart" style="height: 260px;"></div>
+                <select id="area-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">平均成交价</div>
+                <div id="price-chart" style="height: 260px;"></div>
+                <select id="price-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">价格分布</div>
+                <div id="box-chart" style="height: 260px;"></div>
+                <select id="box-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">成交周期平均天数</div>
+                <div id="radar-chart" style="height: 260px;"></div>
+                <select id="radar-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">房屋户型频数统计</div>
+                <div id="heatmap-chart" style="height: 260px;"></div>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">成交量占比</div>
+                <div id="treemap-chart" style="height: 260px;"></div>
+                <select id="treemap-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">区域每平米平均单价</div>
+                <div id="polar-chart" style="height: 260px;"></div>
+                <select id="unit-price-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">热门交易区域</div>
+                <div id="wordcloud-chart" style="height: 260px;"></div>
+                <select id="wordcloud-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">建成年份频数统计</div>
+                <div id="parallel-chart" style="height: 260px;"></div>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">平均挂牌价</div>
+                <div id="sunburst-chart" style="height: 260px;"></div>
+                <select id="sunburst-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">浏览次数分析</div>
+                <div id="views-chart" style="height: 260px;"></div>
+            </div>
+            <!-- 添加新的时间趋势图表 -->
+            <div class="chart-item">
+                <div class="chart-title">价格时间趋势</div>
+                <div id="trend-chart" style="height: 260px;"></div>
+                <div style="position: absolute; top: 10px; right: 10px;">
+                    <select id="price-metric-select">
+                        <option value="price">成交价</option>
+                        <option value="listPrice">挂牌价</option>
+                    </select>
+                </div>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">交易数量趋势</div>
+                <div id="volume-chart" style="height: 260px;"></div>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">平均调价次数</div>
+                <div id="price-adjust-chart" style="height: 260px;"></div>
+                <select id="price-adjust-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <!-- 删除原有的平均总价 chart-item -->
+            <div class="chart-item">
+                <div class="chart-title">区域关注热度</div>
+                <div id="follows-chart" style="height: 260px;"></div>
+                <select id="follows-type-select" style="position: absolute; top: 10px; right: 10px;">
+                    <option value="district">按地区</option>
+                    <option value="community">按小区</option>
+                    <option value="block">按商圈</option>
+                </select>
+            </div>
+            <div class="chart-item">
+                <div class="chart-title">房屋地理分布聚类</div>
+                <div id="location-cluster-chart" style="height: 260px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="info" id="info">请上传 CSV 文件并悬停行政区</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2.1.0/dist/echarts-wordcloud.min.js"></script>
+    <script>
+        const mapDom = document.getElementById('map');
+        const mapChart = echarts.init(mapDom);
+        
+        // 初始化所有图表实例
+        const chartInstances = {};
+        const chartElements = {
+            area: 'area-chart',
+            price: 'price-chart',
+            box: 'box-chart',
+            radar: 'radar-chart',
+            heatmap: 'heatmap-chart',
+            treemap: 'treemap-chart',
+            polar: 'polar-chart',
+            wordcloud: 'wordcloud-chart',
+            parallel: 'parallel-chart',
+            sunburst: 'sunburst-chart',
+            views: 'views-chart',
+            trend: 'trend-chart',
+            volume: 'volume-chart',
+            priceAdjust: 'price-adjust-chart',
+            follows: 'follows-chart',
+            locationCluster: 'location-cluster-chart'
+        };
+
+        // 初始化图表实例
+        Object.entries(chartElements).forEach(([key, elementId]) => {
+            const dom = document.getElementById(elementId);
+            if (dom) {
+                chartInstances[key] = echarts.init(dom);
+                console.log(`初始化图表: ${key}`);
+            } else {
+                console.error(`找不到元素: ${elementId}`);
+            }
+        });
+
+        // 添加选择器事件监听器
+        function initializeSelectListeners() {
+            const selectors = {
+                'area-type-select': 'area',
+                'price-type-select': 'price',
+                'box-type-select': 'box',     // 添加价格分布选择器
+                'radar-type-select': 'radar',
+                'treemap-type-select': 'treemap',
+                'unit-price-type-select': 'polar',
+                'wordcloud-type-select': 'wordcloud',
+                'sunburst-type-select': 'sunburst',
+                'price-metric-select': 'trend',
+                'price-adjust-type-select': 'priceAdjust',
+                'follows-type-select': 'follows'
+            };
+
+            Object.entries(selectors).forEach(([selectId, chartType]) => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    select.addEventListener('change', () => {
+                        console.log(`切换图表 ${chartType} 视图`);
+                        if (chartInstances[chartType]) {
+                            const option = getChartOption(chartType);
+                            chartInstances[chartType].setOption(option, true);
+                        }
+                    });
+                }
+            });
+        }
+
+        // 初始化事件监听器
+        initializeSelectListeners();
+
+        // 添加文件上传事件处理
+        let rawData = [];
+        let districtData = null;
+
+        // 处理CSV文件上传
+        document.getElementById('csvFile').addEventListener('change', event => {
+            const file = event.target.files[0];
+            if (!file) {
+                document.getElementById('info').innerHTML = '未选择文件';
+                return;
+            }
+
+            document.getElementById('info').innerHTML = '正在加载数据...';
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: result => {
+                    if (result.errors.length > 0) {
+                        console.error('CSV解析错误:', result.errors);
+                        document.getElementById('info').innerHTML = 'CSV文件解析错误';
+                        return;
+                    }
+                    
+                    rawData = result.data;
+                    if (rawData.length === 0) {
+                        document.getElementById('info').innerHTML = 'CSV文件为空';
+                        return;
+                    }
+
+                    // 调试输出前几行数据
+                    console.log('数据样本:', rawData.slice(0, 3));
+                    
+                    // 加载数据到图表
+                    loadData(rawData);
+                },
+                error: error => {
+                    console.error('文件读取失败:', error);
+                    document.getElementById('info').innerHTML = '文件读取失败';
+                }
+            });
+        });
+
+        // 加载备用地图数据源
+        const mapUrls = [
+            'https://geo.datav.aliyun.com/areas_v3/bound/310000_full.json',
+            'https://raw.githubusercontent.com/apache/echarts/master/map/json/province/shanghai.json'
+        ];
+
+        // 修改地图加载函数
+        async function loadMapData() {
+            let error;
+            for (const url of mapUrls) {
+                try {
+                    const response = await fetch(url);
+                    if (response.ok) {
+                        return await response.json();
+                    }
+                } catch (err) {
+                    error = err;
+                    console.warn(`Failed to load map from ${url}:`, err);
+                }
+            }
+            throw error || new Error('All map sources failed');
+        }
+
+        function aggregateData(data) {
+            const districts = {};
+            const communities = {};
+            const blocks = {};
+            const viewCategories = {
+                houseType: {},
+                decoration: {},
+                stairRatio: {},
+                elevator: {},
+                ownership: {},
+                usage: {},
+                structure: {},
+                buildingType: {}
+            };
+
+            data.forEach((row, index) => {
+                const district = row['区域']?.trim() || '';
+                const price = parseFloat(row['成交价（万）']) || 0;
+                const area = parseFloat(row['建筑面积（㎡）']) || 0;
+                const unitPrice = parseFloat(row['单价']) || 0;
+                const houseType = row['房屋户型']?.trim() || '';
+                const date = row['成交日期']?.trim() || '';
+                const block = row['商圈']?.trim() || '';
+                const community = row['小区']?.trim() || '';
+                const buildYear = row['建成年代']?.trim() || '';
+                const listPrice = parseFloat(row['挂牌价格（万）']) || 0;
+                const cycleDays = parseFloat(row['成交周期（天）']) || 0;
+                const views = parseFloat(row['浏览（次）']) || 0;
+                const decoration = row['装修情况']?.trim() || '';
+                const stairRatio = row['梯户比例']?.trim() || '';
+                const elevator = row['配备电梯']?.trim() || '';
+                const ownership = row['交易权属']?.trim() || '';
+                const usage = row['房屋用途']?.trim() || '';
+                const structure = row['户型结构']?.trim() || '';
+                const buildingType = row['建筑类型']?.trim() || '';
+                const adjustCount = parseInt(row['调价（次）']) || 0; // 修改字段名
+                const followCount = parseInt(row['关注（人）']) || 0; // 修改字段名
+
+                // 调试：打印每行关键字段
+                if (index < 5) {
+                    console.log(`行 ${index + 1}:`, {
+                        district,
+                        block,
+                        community,
+                        area,
+                        unitPrice,
+                        price,
+                        listPrice,
+                        houseType,
+                        buildYear,
+                        cycleDays,
+                        views,
+                    });
+                }
+
+                // 区域聚合
+                if (district && district !== '未知') {
+                    if (!districts[district]) {
+                        districts[district] = { 
+                            count: 0, 
+                            totalPrice: 0, 
+                            areaSum: 0, 
+                            areaCount: 0, 
+                            unitPriceSum: 0,
+                            unitPriceCount: 0,
+                            listPriceSum: 0,
+                            listPriceCount: 0,
+                            cycleDaysSum: 0,
+                            prices: [],
+                            areas: [],
+                            houseTypes: {}, 
+                            dates: {},
+                            blocks: {},
+                            communities: {},
+                            buildYears: {},
+                            listPrices: [],
+                            cycleDays: [],
+                            adjustSum: 0,
+                            adjustCount: 0,
+                            followSum: 0,
+                            followCount: 0
+                        };
+                    }
+                    districts[district].count += 1;
+                    districts[district].totalPrice += price;
+                    if (!isNaN(area) && area > 0) {
+                        districts[district].areaSum += area;
+                        districts[district].areaCount += 1;
+                    }
+                    if (!isNaN(unitPrice) && unitPrice > 0) {
+                        districts[district].unitPriceSum += unitPrice;
+                        districts[district].unitPriceCount += 1;
+                    }
+                    if (!isNaN(listPrice) && listPrice > 0) {
+                        districts[district].listPriceSum += listPrice;
+                        districts[district].listPriceCount += 1;
+                        districts[district].listPrices.push(listPrice);
+                    }
+                    districts[district].cycleDaysSum += cycleDays;
+                    districts[district].prices.push(price);
+                    districts[district].areas.push(area);
+                    districts[district].cycleDays.push(cycleDays);
+                    if (houseType && houseType !== '未知') {
+                        districts[district].houseTypes[houseType] = (districts[district].houseTypes[houseType] || 0) + 1;
+                    }
+                    if (date && date !== '未知') {
+                        districts[district].dates[date] = (districts[district].dates[date] || 0) + 1;
+                    }
+                    if (block && block !== '未知') {
+                        districts[district].blocks[block] = (districts[district].blocks[block] || { count: 0, totalPrice: 0 });
+                        districts[district].blocks[block].count += 1;
+                        districts[district].blocks[block].totalPrice += price;
+                    }
+                    if (community && community !== '未知') {
+                        districts[district].communities[community] = (districts[district].communities[community] || { count: 0, totalPrice: 0 });
+                        districts[district].communities[community].count += 1;
+                        districts[district].communities[community].totalPrice += price;
+                    }
+                    if (buildYear && buildYear !== '未知' && !isNaN(buildYear) && buildYear >= 1900 && buildYear <= 2025) {
+                        districts[district].buildYears[buildYear] = (districts[district].buildYears[buildYear] || 0) + 1;
+                    }
+                    if (!isNaN(adjustCount) && adjustCount >= 0) {
+                        districts[district].adjustSum += adjustCount;
+                        districts[district].adjustCount += 1;
+                    }
+                    if (!isNaN(followCount) && followCount >= 0) {
+                        districts[district].followSum += followCount;
+                        districts[district].followCount += 1;
+                    }
+                }
+
+                // 小区聚合
+                if (community && community !== '未知') {
+                    if (!communities[community]) {
+                        communities[community] = { 
+                            count: 0, 
+                            totalPrice: 0, 
+                            areaSum: 0, 
+                            areaCount: 0, 
+                            unitPriceSum: 0,
+                            unitPriceCount: 0,
+                            listPriceSum: 0,
+                            listPriceCount: 0,
+                            cycleDaysSum: 0,
+                            adjustSum: 0,
+                            adjustCount: 0,
+                            followSum: 0,
+                            followCount: 0,
+                            prices: [],  // 添加价格数组
+                        };
+                    }
+                    communities[community].count += 1;
+                    communities[community].totalPrice += price;
+                    if (price > 0) {  // 只收集有效价格
+                        communities[community].prices.push(price);
+                    }
+                    if (!isNaN(area) && area > 0) {
+                        communities[community].areaSum += area;
+                        communities[community].areaCount += 1;
+                    }
+                    if (!isNaN(unitPrice) && unitPrice > 0) {
+                        communities[community].unitPriceSum += unitPrice;
+                        communities[community].unitPriceCount += 1;
+                    }
+                    if (!isNaN(listPrice) && listPrice > 0) {
+                        communities[community].listPriceSum += listPrice;
+                        communities[community].listPriceCount += 1;
+                    }
+                    communities[community].cycleDaysSum += cycleDays;
+                    if (!isNaN(adjustCount) && adjustCount >= 0) {
+                        communities[community].adjustSum += adjustCount;
+                        communities[community].adjustCount += 1;
+                    }
+                    if (!isNaN(followCount) && followCount >= 0) {
+                        communities[community].followSum += followCount;
+                        communities[community].followCount += 1;
+                    }
+                }
+
+                // 商圈聚合
+                if (block && block !== '未知') {
+                    if (!blocks[block]) {
+                        blocks[block] = { 
+                            count: 0, 
+                            totalPrice: 0,
+                            areaSum: 0, 
+                            areaCount: 0,
+                            unitPriceSum: 0,
+                            unitPriceCount: 0,
+                            listPriceSum: 0,
+                            listPriceCount: 0,
+                            cycleDaysSum: 0,
+                            adjustSum: 0,
+                            adjustCount: 0,
+                            followSum: 0,
+                            followCount: 0,
+                            prices: [],  // 添加价格数组
+                        };
+                    }
+                    blocks[block].count += 1;
+                    blocks[block].totalPrice += price;
+                    if (price > 0) {  // 只收集有效价格
+                        blocks[block].prices.push(price);
+                    }
+                    if (!isNaN(area) && area > 0) {
+                        blocks[block].areaSum += area;
+                        blocks[block].areaCount += 1;
+                    }
+                    if (!isNaN(unitPrice) && unitPrice > 0) {
+                        blocks[block].unitPriceSum += unitPrice;
+                        blocks[block].unitPriceCount += 1;
+                    }
+                    if (!isNaN(listPrice) && listPrice > 0) {
+                        blocks[block].listPriceSum += listPrice;
+                        blocks[block].listPriceCount += 1;
+                    }
+                    blocks[block].cycleDaysSum += cycleDays;
+                    if (!isNaN(adjustCount) && adjustCount >= 0) {
+                        blocks[block].adjustSum += adjustCount;
+                        blocks[block].adjustCount += 1;
+                    }
+                    if (!isNaN(followCount) && followCount >= 0) {
+                        blocks[block].followSum += followCount;
+                        blocks[block].followCount += 1;
+                    }
+                }
+
+                // 浏览次数聚合
+                if (houseType && houseType !== '未知') {
+                    viewCategories.houseType[houseType] = (viewCategories.houseType[houseType] || 0) + Math.max(0, views);
+                }
+                if (decoration && decoration !== '未知') {
+                    viewCategories.decoration[decoration] = (viewCategories.decoration[decoration] || 0) + Math.max(0, views);
+                }
+                if (stairRatio && stairRatio !== '未知') {
+                    viewCategories.stairRatio[stairRatio] = (viewCategories.stairRatio[stairRatio] || 0) + Math.max(0, views);
+                }
+                if (elevator && elevator !== '未知') {
+                    viewCategories.elevator[elevator] = (viewCategories.elevator[elevator] || 0) + Math.max(0, views);
+                }
+                if (ownership && ownership !== '未知') {
+                    viewCategories.ownership[ownership] = (viewCategories.ownership[ownership] || 0) + Math.max(0, views);
+                }
+                if (usage && usage !== '未知') {
+                    viewCategories.usage[usage] = (viewCategories.usage[usage] || 0) + Math.max(0, views);
+                }
+                if (structure && structure !== '未知') {
+                    viewCategories.structure[structure] = (viewCategories.structure[structure] || 0) + Math.max(0, views);
+                }
+                if (buildingType && buildingType !== '未知') {
+                    viewCategories.buildingType[buildingType] = (viewCategories.buildingType[buildingType] || 0) + Math.max(0, views);
+                }
+
+                // 添加时间维度的价格数据
+                if (district && district !== '未知' && date && date !== '未知') {
+                    if (!districts[district].priceByDate) {
+                        districts[district].priceByDate = {};
+                        districts[district].listPriceByDate = {};
+                    }
+                    if (!districts[district].priceByDate[date]) {
+                        districts[district].priceByDate[date] = { sum: 0, count: 0 };
+                        districts[district].listPriceByDate[date] = { sum: 0, count: 0 };
+                    }
+                    if (price > 0) {
+                        districts[district].priceByDate[date].sum += price;
+                        districts[district].priceByDate[date].count += 1;
+                    }
+                    if (listPrice > 0) {
+                        districts[district].listPriceByDate[date].sum += listPrice;
+                        districts[district].listPriceByDate[date].count += 1;
+                    }
+                }
+            });
+
+            // 添加地理位置数据处理
+            const locationData = [];
+            const locationClusters = {};
+            
+            // 按0.01度网格进行聚类（大约1公里）
+            data.forEach(row => {
+                const lng = parseFloat(row['经度']);
+                const lat = parseFloat(row['纬度']);
+                const price = parseFloat(row['成交价（万）']) || 0;
+                const community = row['小区']?.trim() || '未知';
+                
+                if (!isNaN(lng) && !isNaN(lat) && !isNaN(price) && 
+                    lng >= 120.8 && lng <= 122 &&  // 上海经度范围
+                    lat >= 30.5 && lat <= 32) {    // 上海纬度范围
+                    
+                    // 网格化处理
+                    const gridLng = Math.floor(lng * 100) / 100;
+                    const gridLat = Math.floor(lat * 100) / 100;
+                    const gridKey = `${gridLng},${gridLat}`;
+                    
+                    if (!locationClusters[gridKey]) {
+                        locationClusters[gridKey] = {
+                            count: 0,
+                            totalPrice: 0,
+                            communities: new Set(),
+                            districts: new Set()
+                        };
+                    }
+                    
+                    locationClusters[gridKey].count++;
+                    locationClusters[gridKey].totalPrice += price;
+                    locationClusters[gridKey].communities.add(community);
+                    locationClusters[gridKey].districts.add(row['区域']?.trim() || '未知');
+                }
+            });
+            
+            // 转换聚类数据为点
+            Object.entries(locationClusters).forEach(([key, cluster]) => {
+                const [gridLng, gridLat] = key.split(',').map(Number);
+                locationData.push({
+                    name: Array.from(cluster.communities).join(', '),
+                    value: [
+                        gridLng + 0.005, // 网格中心
+                        gridLat + 0.005,
+                        cluster.totalPrice / cluster.count
+                    ],
+                    count: cluster.count,
+                    district: Array.from(cluster.districts).join(', ')
+                });
+            });
+
+            const aggregatedData = {
+                districts: Object.entries(districts).map(([name, data]) => ({
+                    name,
+                    count: data.count,
+                    avgPrice: data.count > 0 ? (data.totalPrice / data.count).toFixed(2) : 0,
+                    totalPrice: data.totalPrice.toFixed(2),
+                    avgArea: data.areaCount > 0 ? (data.areaSum / data.areaCount).toFixed(2) : 0,
+                    areaCount: data.areaCount,
+                    avgUnitPrice: data.unitPriceCount > 0 ? (data.unitPriceSum / data.unitPriceCount).toFixed(2) : 0,
+                    unitPriceCount: data.unitPriceCount,
+                    avgListPrice: data.listPriceCount > 0 ? (data.listPriceSum / data.listPriceCount).toFixed(2) : 0,
+                    listPriceCount: data.listPriceCount,
+                    avgCycleDays: data.count > 0 ? (data.cycleDaysSum / data.count).toFixed(2) : 0,
+                    prices: data.prices,
+                    areas: data.areas,
+                    houseTypes: data.houseTypes,
+                    dates: data.dates,
+                    blocks: Object.entries(data.blocks).map(([b, d]) => ({
+                        name: b,
+                        count: d.count,
+                        avgPrice: d.count > 0 ? (d.totalPrice / d.count).toFixed(2) : 0
+                    })),
+                    communities: Object.entries(data.communities).map(([c, d]) => ({
+                        name: c,
+                        count: d.count,
+                        avgPrice: d.count > 0 ? (d.totalPrice / d.count).toFixed(2) : 0
+                    })),
+                    buildYears: data.buildYears,
+                    listPrices: data.listPrices,
+                    cycleDays: data.cycleDays,
+                    priceByDate: data.priceByDate,
+                    listPriceByDate: data.listPriceByDate,
+                    avgAdjust: data.adjustCount > 0 ? (data.adjustSum / data.adjustCount).toFixed(2) : 0,
+                    adjustCount: data.adjustCount,
+                    avgFollow: data.followCount > 0 ? (data.followSum / data.followCount).toFixed(2) : 0,
+                    followCount: data.followCount,
+                })),
+                communities: Object.entries(communities).map(([name, data]) => ({
+                    name,
+                    count: data.count,  // 修复：使用 data.count 而不是未定义的 count
+                    avgPrice: data.count > 0 ? (data.totalPrice / data.count).toFixed(2) : 0,
+                    avgArea: data.areaCount > 0 ? (data.areaSum / data.areaCount).toFixed(2) : 0,
+                    areaCount: data.areaCount,
+                    avgUnitPrice: data.unitPriceCount > 0 ? (data.unitPriceSum / data.unitPriceCount).toFixed(2) : 0,
+                    unitPriceCount: data.unitPriceCount,
+                    avgListPrice: data.listPriceCount > 0 ? (data.listPriceSum / data.listPriceCount).toFixed(2) : 0,
+                    listPriceCount: data.listPriceCount,
+                    avgCycleDays: data.count > 0 ? (data.cycleDaysSum / data.count).toFixed(2) : 0,
+                    avgAdjust: data.adjustCount > 0 ? (data.adjustSum / data.adjustCount).toFixed(2) : 0,
+                    adjustCount: data.adjustCount,
+                    avgFollow: data.followCount > 0 ? (data.followSum / data.followCount).toFixed(2) : 0,
+                    followCount: data.followCount,
+                    prices: data.prices || [],  // 确保包含价格数组
+                })),
+                blocks: Object.entries(blocks).map(([name, data]) => ({
+                    name,
+                    count: data.count,
+                    avgPrice: data.count > 0 ? (data.totalPrice / data.count).toFixed(2) : 0,
+                    avgArea: data.areaCount > 0 ? (data.areaSum / data.areaCount).toFixed(2) : 0,
+                    areaCount: data.areaCount,
+                    avgUnitPrice: data.unitPriceCount > 0 ? (data.unitPriceSum / data.unitPriceCount).toFixed(2) : 0,
+                    unitPriceCount: data.unitPriceCount,
+                    avgListPrice: data.listPriceCount > 0 ? (data.listPriceSum / data.listPriceCount).toFixed(2) : 0,
+                    listPriceCount: data.listPriceCount,
+                    avgCycleDays: data.count > 0 ? (data.cycleDaysSum / data.count).toFixed(2) : 0,
+                    avgAdjust: data.adjustCount > 0 ? (data.adjustSum / data.adjustCount).toFixed(2) : 0,
+                    adjustCount: data.adjustCount,
+                    avgFollow: data.followCount > 0 ? (data.followSum / data.followCount).toFixed(2) : 0,
+                    followCount: data.followCount,
+                    prices: data.prices || [],  // 确保包含价格数组
+                })),
+                viewCategories,
+                locationData: locationData  // 添加到返回数据中
+            };
+            console.log('聚合数据:', {
+                districts: aggregatedData.districts.map(d => ({
+                    name: d.name,
+                    avgPrice: d.avgPrice,
+                    avgUnitPrice: d.avgUnitPrice,
+                    unitPriceCount: d.unitPriceCount,
+                    avgArea: d.avgArea,
+                    areaCount: d.areaCount,
+                    avgListPrice: d.avgListPrice,
+                    avgCycleDays: d.avgCycleDays,
+                })),
+                communities: aggregatedData.communities.map(c => ({
+                    name: c.name,
+                    avgPrice: c.avgPrice,
+                    avgUnitPrice: c.avgUnitPrice,
+                    unitPriceCount: c.unitPriceCount,
+                    avgArea: c.avgArea,
+                    areaCount: c.areaCount,
+                    avgListPrice: c.avgListPrice,
+                    avgCycleDays: c.avgCycleDays,
+                })),
+                blocks: aggregatedData.blocks.map(b => ({
+                    name: b.name,
+                    avgPrice: b.avgPrice,
+                    avgUnitPrice: b.avgUnitPrice,
+                    unitPriceCount: b.unitPriceCount,
+                    avgArea: b.avgArea,
+                    areaCount: b.areaCount,
+                    avgListPrice: b.avgListPrice,
+                    avgCycleDays: b.avgCycleDays,
+                }))
+            });
+            
+            // 添加统计信息
+            const stats = {
+                maxPriceCommunity: communities.length > 0 ? 
+                    Object.entries(communities)
+                        .sort((a, b) => parseFloat(b[1].avgPrice) - parseFloat(a[1].avgPrice))[0] : null,
+                maxFollowDistrict: aggregatedData.districts
+                    .sort((a, b) => parseFloat(b.avgFollow) - parseFloat(a.avgFollow))[0],
+                maxVolumeDistrict: aggregatedData.districts
+                    .sort((a, b) => b.count - a.count)[0],
+                maxUnitPriceCommunity: communities.length > 0 ?
+                    Object.entries(communities)
+                        .sort((a, b) => parseFloat(b[1].avgUnitPrice) - parseFloat(a[1].avgUnitPrice))[0] : null,
+                minCycleDaysCommunity: communities.length > 0 ?
+                    Object.entries(communities)
+                        .filter(([_, data]) => parseFloat(data.avgCycleDays) > 0)
+                        .sort((a, b) => parseFloat(a[1].avgCycleDays) - parseFloat(b[1].avgCycleDays))[0] : null,
+                maxAreaCommunity: communities.length > 0 ?
+                    Object.entries(communities)
+                        .sort((a, b) => parseFloat(b[1].avgArea) - parseFloat(a[1].avgArea))[0] : null
+            };
+            
+            aggregatedData.stats = stats;
+            return aggregatedData;
+        }
+
+        function getChartOption(type) {
+            const commonTooltip = {
+                backgroundColor: 'rgba(0, 20, 60, 0.8)',
+                borderColor: '#00d4ff',
+                textStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' }
+            };
+
+            // 声明通用变量
+            let xAxisName = '';
+            let data = [];
+            
+            switch (type) {
+                case 'area':
+                    const areaType = document.getElementById('area-type-select').value;
+                    let areaData = [];
+                    if (areaType === 'district') {
+                        areaData = districtData.districts
+                            .filter(d => d.areaCount > 0)
+                            .map(d => ({
+                                name: d.name,
+                                avgArea: parseFloat(d.avgArea) || 0
+                            }))
+                            .filter(d => d.avgArea > 0);
+                        xAxisName = '地区';
+                    } else if (areaType === 'community') {
+                        areaData = districtData.communities
+                            .filter(c => c.areaCount > 0)
+                            .map(c => ({
+                                name: c.name,
+                                avgArea: parseFloat(c.avgArea) || 0
+                            }))
+                            .filter(c => c.avgArea > 0)
+                            .sort((a, b) => b.avgArea - a.avgArea)
+                            .slice(0, 20);
+                        xAxisName = '小区';
+                    } else if (areaType === 'block') {
+                        areaData = districtData.blocks
+                            .filter(b => b.areaCount > 0)
+                            .map(b => ({
+                                name: b.name,
+                                avgArea: parseFloat(b.avgArea) || 0
+                            }))
+                            .filter(b => b.avgArea > 0);
+                        xAxisName = '商圈';
+                    }
+                    console.log('面积数据:', { areaType, areaData });
+                    if (areaData.length === 0) {
+                        return { title: { text: `无有效${xAxisName}面积数据`, left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: { ...commonTooltip, formatter: '{b}: {c} ㎡' },
+                        xAxis: { 
+                            type: 'category',
+                            data: areaData.map(d => d.name),
+                            name: xAxisName,
+                            nameLocation: 'middle',
+                            nameGap: 30,
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { 
+                                color: '#e0f7ff', 
+                                rotate: areaType === 'community' ? 45 : 0,
+                                interval: areaType === 'community' ? 0 : 'auto',
+                                fontSize: areaType === 'community' ? 10 : 12
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '平均建筑面积（㎡）',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: areaData.map(d => d.avgArea),
+                            itemStyle: {
+                                color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#00d4ff' }, { offset: 1, color: '#1e90ff' }] },
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} ㎡',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron'
+                            },
+                            barWidth: areaType === 'community' ? '40%' : '60%'
+                        }]
+                    };
+                case 'price':
+                    const priceType = document.getElementById('price-type-select').value;
+                    let priceData = [];
+                    if (priceType === 'district') {
+                        priceData = districtData.districts
+                            .filter(d => d.count > 0)
+                            .map(d => ({
+                                name: d.name,
+                                avgPrice: parseFloat(d.avgPrice) || 0
+                            }))
+                            .filter(d => d.avgPrice > 0);
+                        xAxisName = '地区';
+                    } else if (priceType === 'community') {
+                        priceData = districtData.communities
+                            .filter(c => c.count > 0)
+                            .map(c => ({
+                                name: c.name,
+                                avgPrice: parseFloat(c.avgPrice) || 0
+                            }))
+                            .filter(c => c.avgPrice > 0)
+                            .sort((a, b) => b.avgPrice - a.avgPrice)
+                            .slice(0, 20);
+                        xAxisName = '小区';
+                    } else if (priceType === 'block') {
+                        priceData = districtData.blocks
+                            .filter(b => b.count > 0)
+                            .map(b => ({
+                                name: b.name,
+                                avgPrice: parseFloat(b.avgPrice) || 0
+                            }))
+                            .filter(b => b.avgPrice > 0);
+                        xAxisName = '商圈';
+                    }
+                    console.log('成交价数据:', { priceType, priceData });
+                    if (priceData.length === 0) {
+                        return { title: { text: `无有效${xAxisName}成交价数据`, left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: { ...commonTooltip, formatter: '{b}: {c} 万' },
+                        xAxis: { 
+                            type: 'category',
+                            data: priceData.map(d => d.name),
+                            name: xAxisName,
+                            nameLocation: 'middle',
+                            nameGap: 30,
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { 
+                                color: '#e0f7ff', 
+                                rotate: priceType === 'community' ? 45 : 0,
+                                interval: priceType === 'community' ? 0 : 'auto',
+                                fontSize: priceType === 'community' ? 10 : 12
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '平均成交价（万）',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: priceData.map(d => d.avgPrice),
+                            itemStyle: {
+                                color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#00d4ff' }, { offset: 1, color: '#1e90ff' }] },
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} 万',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron'
+                            },
+                            barWidth: priceType === 'community' ? '40%' : '60%'
+                        }]
+                    };
+                case 'box':
+                    const boxType = document.getElementById('box-type-select').value;
+                    let priceDistData = [];
+                    
+                    // 根据选择类型获取并过滤数据
+                    if (boxType === 'district') {
+                        priceDistData = districtData.districts.map(d => ({
+                            name: d.name,
+                            prices: d.prices,
+                            count: d.count
+                        }));
+                    } else if (boxType === 'community') {
+                        priceDistData = districtData.communities
+                            .filter(c => c.count >= 5)
+                            .map(c => ({
+                                name: c.name,
+                                prices: c.prices || [],
+                                count: c.count
+                            }))
+                            .sort((a, b) => b.prices.length - a.prices.length)
+                            .slice(0, 20);
+                    } else if (boxType === 'block') {
+                        priceDistData = districtData.blocks
+                            .filter(b => b.count >= 10)
+                            .map(b => ({
+                                name: b.name,
+                                prices: b.prices || [],
+                                count: b.count
+                            }));
+                    }
+                    
+                    const boxData = priceDistData
+                        .map(d => {
+                            const sorted = d.prices.filter(p => !isNaN(p) && p > 0).sort((a, b) => a - b);
+                            if (sorted.length < 3) return null;
+                            
+                            const len = sorted.length;
+                            const q1 = sorted[Math.floor(len * 0.25)];
+                            const median = sorted[Math.floor(len * 0.5)];
+                            const q3 = sorted[Math.floor(len * 0.75)];
+                            const iqr = q3 - q1;
+                            const upperLimit = q3 + 1.5 * iqr;
+                            const lowerLimit = q1 - 1.5 * iqr;
+                            
+                            // 分类所有数据点
+                            const outliers = sorted.filter(p => p < lowerLimit || p > upperLimit);
+                            const normalPoints = sorted.filter(p => p >= lowerLimit && p <= upperLimit);
+                            
+                            return {
+                                name: d.name,
+                                count: d.count,
+                                value: [normalPoints[0], q1, median, q3, normalPoints[normalPoints.length - 1]], // 箱体数据
+                                outliers: outliers, // 异常值
+                                mean: sorted.reduce((a, b) => a + b, 0) / len,
+                                stdDev: Math.sqrt(sorted.reduce((acc, val) => 
+                                    acc + Math.pow(val - sorted.reduce((a, b) => a + b, 0) / len, 2), 0) / len)
+                            };
+                        })
+                        .filter(d => d && d.value[2] > 0);
+
+                    return {
+                        title: {
+                            text: `${boxType === 'district' ? '地区' : boxType === 'community' ? '小区' : '商圈'}价格分布`,
+                            left: 'center',
+                            top: 10,
+                            textStyle: {
+                                color: '#e0f7ff',
+                                fontSize: 16,
+                                fontFamily: 'Orbitron'
+                            }
+                        },
+                        tooltip: {
+                            trigger: 'item',
+                            backgroundColor: 'rgba(0, 20, 60, 0.9)',
+                            borderColor: '#00d4ff',
+                            borderWidth: 2,
+                            padding: 15,
+                            textStyle: {
+                                color: '#e0f7ff',
+                                fontSize: 14
+                            },
+                            formatter: function(params) {
+                                const boxItem = boxData[params.dataIndex];
+                                
+                                // 处理异常值的悬浮提示
+                                if (params.seriesName === '异常值') {
+                                    return `<div style="font-family: 'Orbitron', sans-serif;">
+                                        <strong>${boxData[params.value[0]].name}</strong><br/>
+                                        <hr style="border-color: #00d4ff; margin: 5px 0"/>
+                                        异常值：${params.value[1].toFixed(2)}万
+                                    </div>`;
+                                }
+                                
+                                // 处理均值点的悬浮提示
+                                if (params.seriesName === '均值') {
+                                    return `<div style="font-family: 'Orbitron', sans-serif;">
+                                        <strong>${params.data.name}</strong><br/>
+                                        <hr style="border-color: #00d4ff; margin: 5px 0"/>
+                                        均值：${params.data.mean.toFixed(2)}万
+                                    </div>`;
+                                }
+                                
+                                // 处理箱线图主体的悬浮提示
+                                if (boxItem) {
+                                    const outlierStr = boxItem.outliers.length > 0 ? 
+                                        `异常值范围：${Math.min(...boxItem.outliers).toFixed(2)} ~ ${Math.max(...boxItem.outliers).toFixed(2)}万<br/>` : '';
+                                    
+                                    return `<div style="font-family: 'Orbitron', sans-serif;">
+                                        <strong>${boxItem.name}</strong><br/>
+                                        <hr style="border-color: #00d4ff; margin: 5px 0"/>
+                                        ${outlierStr}
+                                        箱体上限：${params.data.value[4].toFixed(2)}万<br/>
+                                        上四分位：${params.data.value[3].toFixed(2)}万<br/>
+                                        中位数：${params.data.value[2].toFixed(2)}万<br/>
+                                        下四分位：${params.data.value[1].toFixed(2)}万<br/>
+                                        箱体下限：${params.data.value[0].toFixed(2)}万<br/>
+                                        <hr style="border-color: #00d4ff; margin: 5px 0"/>
+                                        均价：${boxItem.mean.toFixed(2)}万<br/>
+                                        标准差：${boxItem.stdDev.toFixed(2)}<br/>
+                                        成交量：${boxItem.count}套<br/>
+                                        异常值数：${boxItem.outliers.length}个
+                                    </div>`;
+                                }
+                                return '';
+                            }
+                        },
+                        grid: {
+                            left: '10%',
+                            right: '10%',
+                            bottom: '25%', // 增加底部空间以放置缩放控件
+                            top: '15%',
+                            containLabel: true
+                        },
+                        dataZoom: [
+                            {
+                                type: 'slider',
+                                show: true,
+                                xAxisIndex: [0],
+                                bottom: '8%',
+                                height: 20,
+                                borderColor: '#00d4ff',
+                                backgroundColor: 'rgba(0, 20, 60, 0.7)',
+                                fillerColor: 'rgba(0, 212, 255, 0.2)',
+                                handleStyle: {
+                                    color: '#00d4ff'
+                                },
+                                textStyle: {
+                                    color: '#e0f7ff'
+                                },
+                                handleIcon: 'M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z',
+                                brushSelect: false,
+                                start: 0,
+                                end: 100
+                            },
+                            {
+                                type: 'inside',
+                                xAxisIndex: [0],
+                                zoomOnMouseWheel: 'shift',
+                                moveOnMouseMove: true,
+                                moveOnMouseWheel: true
+                            }
+                        ],
+                        xAxis: {
+                            type: 'category',
+                            data: boxData.map(d => d.name),
+                            axisLabel: {
+                                color: '#e0f7ff',
+                                rotate: boxType === 'community' ? 45 : 0,
+                                interval: 0,  // 显示所有标签
+                                fontSize: boxType === 'community' ? 10 : 12,
+                                formatter: function(value) {
+                                    return value.length > 8 ? value.substring(0, 8) + '...' : value;
+                                }
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '价格（万）',
+                            nameTextStyle: {
+                                color: '#e0f7ff',
+                                fontSize: 14,
+                                padding: [0, 0, 0, 40]
+                            },
+                            axisLabel: { color: '#e0f7ff' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            name: '价格分布',
+                            type: 'boxplot',
+                            data: boxData.map(d => ({
+                                name: d.name,
+                                value: d.value,
+                                count: d.count,
+                                mean: d.mean,
+                                stdDev: d.stdDev
+                            })),
+                            itemStyle: {
+                                borderWidth: 2,
+                                borderColor: '#00d4ff',
+                                color: {
+                                    type: 'linear',
+                                    x: 0, y: 0, x2: 0, y2: 1,
+                                    colorStops: [{
+                                        offset: 0,
+                                        color: 'rgba(0, 212, 255, 0.7)'
+                                    }, {
+                                        offset: 1,
+                                        color: 'rgba(30, 144, 255, 0.3)'
+                                    }]
+                                }
+                            },
+                            emphasis: {
+                                itemStyle: {
+                                    borderWidth: 3,
+                                    borderColor: '#fff',
+                                    shadowBlur: 20,
+                                    shadowColor: '#00d4ff'
+                                }
+                            }
+                        }, {
+                            name: '异常值',
+                            type: 'scatter',
+                            data: boxData.flatMap((d, idx) => 
+                                d.outliers.map(v => [idx, v])
+                            ),
+                            itemStyle: {
+                                color: '#ff4444',
+                                borderColor: '#fff',
+                                borderWidth: 1,
+                                shadowBlur: 5,
+                                shadowColor: '#ff4444'
+                            }
+                        }, {
+                            name: '均值',
+                            type: 'scatter',
+                            data: boxData.map((d, idx) => ({
+                                name: d.name,
+                                value: [idx, d.mean],
+                                count: d.count,
+                                mean: d.mean,
+                                stdDev: d.stdDev
+                            })),
+                            symbol: 'diamond',
+                            symbolSize: 10,
+                            itemStyle: {
+                                color: '#ff7f50',
+                                borderColor: '#fff',
+                                borderWidth: 2,
+                                shadowBlur: 10,
+                                shadowColor: '#ff7f50'
+                            },
+                            emphasis: {
+                                scale: true
+                            }
+                        }]
+                    };
+                case 'radar':
+                    const radarType = document.getElementById('radar-type-select').value;
+                    let cycleData = [];
+                    if (radarType === 'district') {
+                        cycleData = districtData.districts
+                            .filter(d => d.count > 0)
+                            .map(d => ({
+                                name: d.name,
+                                avgCycleDays: parseFloat(d.avgCycleDays) || 0
+                            }))
+                            .filter(d => d.avgCycleDays > 0);
+                        xAxisName = '地区';
+                    } else if (radarType === 'community') {
+                        cycleData = districtData.communities
+                            .filter(c => c.count > 0)
+                            .map(c => ({
+                                name: c.name,
+                                avgCycleDays: parseFloat(c.avgCycleDays) || 0
+                            }))
+                            .filter(c => c.avgCycleDays > 0)
+                            .sort((a, b) => b.avgCycleDays - a.avgCycleDays)
+                            .slice(0, 20);
+                        xAxisName = '小区';
+                    } else if (radarType === 'block') {
+                        cycleData = districtData.blocks
+                            .filter(b => b.count > 0)
+                            .map(b => ({
+                                name: b.name,
+                                avgCycleDays: parseFloat(b.avgCycleDays) || 0
+                            }))
+                            .filter(b => b.avgCycleDays > 0);
+                        xAxisName = '商圈';
+                    }
+                    console.log('成交周期数据:', { radarType, cycleData });
+                    if (cycleData.length === 0) {
+                        return { title: { text: `无有效${xAxisName}成交周期数据`, left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: { ...commonTooltip, formatter: '{b}: {c} 天' },
+                        xAxis: { 
+                            type: 'category',
+                            data: cycleData.map(d => d.name),
+                            name: xAxisName,
+                            nameLocation: 'middle',
+                            nameGap: 30,
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { 
+                                color: '#e0f7ff', 
+                                rotate: radarType === 'community' ? 45 : 0,
+                                interval: radarType === 'community' ? 0 : 'auto',
+                                fontSize: radarType === 'community' ? 10 : 12
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '平均成交周期（天）',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: cycleData.map(d => d.avgCycleDays),
+                            itemStyle: {
+                                color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#00d4ff' }, { offset: 1, color: '#1e90ff' }] },
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} 天',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron'
+                            },
+                            barWidth: radarType === 'community' ? '40%' : '60%'
+                        }]
+                    };
+                case 'heatmap':
+                    const houseTypeData = Object.entries(
+                        rawData.reduce((acc, row) => {
+                            const houseType = row['房屋户型']?.trim();
+                            if (houseType && houseType !== '未知' && houseType !== '') {
+                                acc[houseType] = (acc[houseType] || 0) + 1;
+                            }
+                            return acc;
+                        }, {})
+                    ).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                    console.log('房屋户型数据:', houseTypeData);
+                    if (houseTypeData.length === 0) {
+                        return { title: { text: '无有效户型数据', left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: { ...commonTooltip, formatter: '{b}: {c} 套' },
+                        xAxis: { 
+                            type: 'category',
+                            data: houseTypeData.map(([type]) => type),
+                            name: '房屋户型',
+                            nameLocation: 'middle',
+                            nameGap: 25,
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', rotate: 45, fontSize: 10 },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '房源数量（套）',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            name: '户型数量',
+                            type: 'bar',
+                            data: houseTypeData.map(([_, count]) => count),
+                            itemStyle: {
+                                color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#00d4ff' }, { offset: 1, color: '#1e90ff' }] },
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} 套',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron'
+                            },
+                            barWidth: '40%'
+                        }]
+                    };
+                case 'treemap':
+                    const treeType = document.getElementById('treemap-type-select').value;
+                    let treeData = [];
+                    let totalCount = 0;
+                    switch (treeType) {
+                        case 'district':
+                            treeData = districtData.districts;
+                            totalCount = treeData.reduce((sum, d) => sum + d.count, 0);
+                            break;
+                        case 'community':
+                            treeData = districtData.communities
+                                .sort((a, b) => b.count - a.count)
+                                .slice(0, 20);
+                            totalCount = treeData.reduce((sum, c) => sum + c.count, 0);
+                            break;
+                        case 'block':
+                            treeData = districtData.blocks;
+                            totalCount = treeData.reduce((sum, b) => sum + b.count, 0);
+                            break;
+                    }
+                    if (treeData.length === 0) {
+                        return { title: { text: '无有效数据', left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: {
+                            ...commonTooltip,
+                            formatter: function(params) {
+                                const percent = ((params.value / totalCount) * 100).toFixed(2);
+                                return `${params.name}<br/>成交量: ${params.value} 套<br/>占比: ${percent}%`;
+                            }
+                        },
+                        series: [{
+                            type: 'treemap',
+                            data: treeData.map(item => ({
+                                name: item.name,
+                                value: item.count
+                            })),
+                            label: {
+                                show: true,
+                                formatter: '{b}\n{c}套',
+                                color: '#e0f7ff'
+                            },
+                            itemStyle: {
+                                borderColor: '#00d4ff',
+                                borderWidth: 1,
+                                gapWidth: 1
+                            },
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowColor: '#00d4ff'
+                                }
+                            }
+                        }]
+                    };
+                case 'polar':
+                    const unitPriceType = document.getElementById('unit-price-type-select').value;
+                    let unitPriceData = [];
+                    if (unitPriceType === 'district') {
+                        unitPriceData = districtData.districts
+                            .filter(d => d.unitPriceCount > 0)
+                            .map(d => ({
+                                name: d.name,
+                                avgUnitPrice: parseFloat(d.avgUnitPrice) || 0
+                            }))
+                            .filter(d => d.avgUnitPrice > 0);
+                        xAxisName = '地区';
+                    } else if (unitPriceType === 'community') {
+                        unitPriceData = districtData.communities
+                            .filter(c => c.unitPriceCount > 0)
+                            .map(c => ({
+                                name: c.name,
+                                avgUnitPrice: parseFloat(c.avgUnitPrice) || 0
+                            }))
+                            .filter(c => c.avgUnitPrice > 0)
+                            .sort((a, b) => b.avgUnitPrice - a.avgUnitPrice)
+                            .slice(0, 20);
+                        xAxisName = '小区';
+                    } else if (unitPriceType === 'block') {
+                        unitPriceData = districtData.blocks
+                            .filter(b => b.unitPriceCount > 0)
+                            .map(b => ({
+                                name: b.name,
+                                avgUnitPrice: parseFloat(b.avgUnitPrice) || 0
+                            }))
+                            .filter(b => b.avgUnitPrice > 0);
+                        xAxisName = '商圈';
+                    }
+                    console.log('单价数据:', { unitPriceType, unitPriceData });
+                    if (unitPriceData.length === 0) {
+                        return { title: { text: `无有效${xAxisName}单价数据`, left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: { ...commonTooltip, formatter: '{b}: {c} 万/平米' },
+                        xAxis: { 
+                            type: 'category',
+                            data: unitPriceData.map(d => d.name),
+                            name: xAxisName,
+                            nameLocation: 'middle',
+                            nameGap: 30,
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { 
+                                color: '#e0f7ff', 
+                                rotate: unitPriceType === 'community' ? 45 : 0,
+                                interval: unitPriceType === 'community' ? 0 : 'auto',
+                                fontSize: unitPriceType === 'community' ? 10 : 12
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '平均单价（万/平米）',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: unitPriceData.map(d => d.avgUnitPrice),
+                            itemStyle: {
+                                color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#00d4ff' }, { offset: 1, color: '#1e90ff' }] },
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} 万/平米',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron'
+                            },
+                            barWidth: unitPriceType === 'community' ? '40%' : '60%'
+                        }]
+                    };
+                case 'wordcloud':
+                    const cloudType = document.getElementById('wordcloud-type-select').value;
+                    let cloudData = [];
+                    switch (cloudType) {
+                        case 'district':
+                            cloudData = districtData.districts.map(d => ({ name: d.name, value: d.count }));
+                            break;
+                        case 'community':
+                            cloudData = districtData.communities
+                                .map(c => ({ name: c.name, value: c.count }))
+                                .sort((a, b) => b.value - a.value)
+                                .slice(0, 50);
+                            break;
+                        case 'block':
+                            cloudData = districtData.blocks.map(b => ({ name: b.name, value: b.count }));
+                            break;
+                    }
+                    if (cloudData.length === 0) {
+                        return { title: { text: '无有效数据', left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: {
+                            ...commonTooltip,
+                            formatter: function(params) {
+                                return `${params.name}: ${params.value} 套`;
+                            }
+                        },
+                        series: [{
+                            type: 'wordCloud',
+                            data: cloudData,
+                            textStyle: {
+                                fontFamily: 'Orbitron',
+                                fontWeight: 'bold',
+                                color: function() {
+                                    return 'rgb(' + [
+                                        Math.round(Math.random() * 100 + 155),
+                                        Math.round(Math.random() * 100 + 155),
+                                        Math.round(Math.random() * 100 + 155)
+                                    ].join(',') + ')';
+                                }
+                            },
+                            emphasis: {
+                                textStyle: {
+                                    shadowBlur: 10,
+                                    shadowColor: '#00d4ff'
+                                }
+                            },
+                            sizeRange: [12, 50],
+                            rotationRange: [-45, 45],
+                            gridSize: 8,
+                            shape: 'circle',
+                            drawOutOfBound: false
+                        }]
+                    };
+                case 'funnel':
+                    if (!districtData.communities || districtData.communities.length === 0) {
+                        return { title: { text: '无有效小区数据', left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        series: [{
+                            type: 'wordCloud',
+                            data: districtData.communities.map(c => ({ name: c.name, value: c.count })),
+                            textStyle: { color: '#00d4ff' },
+                            sizeRange: [10, 50],
+                            rotationRange: [-45, 45],
+                            gridSize: 8,
+                            shape: 'circle',
+                            drawOutOfBound: false
+                        }]
+                    };
+                case 'parallel':
+                    const yearCounts = rawData.reduce((acc, row) => {
+                        const year = row['建成年代']?.trim();
+                        if (year && year !== '未知' && year !== '' && !isNaN(year) && year >= 1900 && year <= 2025) {
+                            acc[year] = (acc[year] || 0) + 1;
+                        }
+                        return acc;
+                    }, {});
+                    const years = Object.keys(yearCounts).sort((a, b) => parseInt(a) - parseInt(b));
+                    console.log('建成年份数据:', yearCounts);
+                    if (years.length === 0) {
+                        return { title: { text: '无有效年份数据', left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: { ...commonTooltip, formatter: '{b}: {c} 套' },
+                        xAxis: { 
+                            type: 'category',
+                            data: years,
+                            name: '建成年份',
+                            nameLocation: 'middle',
+                            nameGap: 25,
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', rotate: 45 },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '房源数量（套）',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: years.map(year => yearCounts[year] || 0),
+                            itemStyle: {
+                                color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#00d4ff' }, { offset: 1, color: '#1e90ff' }] },
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} 套',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron'
+                            },
+                            barWidth: '60%'
+                        }]
+                    };
+                case 'sunburst':
+                    const sunburstType = document.getElementById('sunburst-type-select').value;
+                    let listPriceData = [];
+                    if (sunburstType === 'district') {
+                        listPriceData = districtData.districts
+                            .filter(d => d.listPriceCount > 0)
+                            .map(d => ({
+                                name: d.name,
+                                avgListPrice: parseFloat(d.avgListPrice) || 0
+                            }))
+                            .filter(d => d.avgListPrice > 0);
+                        xAxisName = '地区';
+                    } else if (sunburstType === 'community') {
+                        listPriceData = districtData.communities
+                            .filter(c => c.listPriceCount > 0)
+                            .map(c => ({
+                                name: c.name,
+                                avgListPrice: parseFloat(c.avgListPrice) || 0
+                            }))
+                            .filter(c => c.avgListPrice > 0)
+                            .sort((a, b) => b.avgListPrice - a.avgListPrice)
+                            .slice(0, 20);
+                        xAxisName = '小区';
+                    } else if (sunburstType === 'block') {
+                        listPriceData = districtData.blocks
+                            .filter(b => b.listPriceCount > 0)
+                            .map(b => ({
+                                name: b.name,
+                                avgListPrice: parseFloat(b.avgListPrice) || 0
+                            }))
+                            .filter(b => b.avgListPrice > 0);
+                        xAxisName = '商圈';
+                    }
+                    console.log('挂牌价数据:', { sunburstType, listPriceData });
+                    if (listPriceData.length === 0) {
+                        return { title: { text: `无有效${xAxisName}挂牌价数据`, left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: { ...commonTooltip, formatter: '{b}: {c} 万' },
+                        xAxis: { 
+                            type: 'category',
+                            data: listPriceData.map(d => d.name),
+                            name: xAxisName,
+                            nameLocation: 'middle',
+                            nameGap: 30,
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { 
+                                color: '#e0f7ff', 
+                                rotate: sunburstType === 'community' ? 45 : 0,
+                                interval: sunburstType === 'community' ? 0 : 'auto',
+                                fontSize: sunburstType === 'community' ? 10 : 12
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '平均挂牌价（万）',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: listPriceData.map(d => d.avgListPrice),
+                            itemStyle: {
+                                color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#00d4ff' }, { offset: 1, color: '#1e90ff' }] },
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} 万',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron'
+                            },
+                            barWidth: sunburstType === 'community' ? '40%' : '60%'
+                        }]
+                    };
+                case 'views':
+                    const viewData = [
+                        ...Object.entries(districtData.viewCategories.houseType).map(([name, value]) => ({ name: `户型: ${name}`, value })),
+                        ...Object.entries(districtData.viewCategories.decoration).map(([name, value]) => ({ name: `装修: ${name}`, value })),
+                        ...Object.entries(districtData.viewCategories.stairRatio).map(([name, value]) => ({ name: `梯户: ${name}`, value })),
+                        ...Object.entries(districtData.viewCategories.elevator).map(([name, value]) => ({ name: `电梯: ${name}`, value })),
+                        ...Object.entries(districtData.viewCategories.ownership).map(([name, value]) => ({ name: `权属: ${name}`, value })),
+                        ...Object.entries(districtData.viewCategories.usage).map(([name, value]) => ({ name: `用途: ${name}`, value })),
+                        ...Object.entries(districtData.viewCategories.structure).map(([name, value]) => ({ name: `结构: ${name}`, value })),
+                        ...Object.entries(districtData.viewCategories.buildingType).map(([name, value]) => ({ name: `建筑: ${name}`, value }))
+                    ].filter(d => d.name !== '户型: 未知' && d.name !== '装修: 未知' && d.name !== '梯户: 未知' && 
+                               d.name !== '电梯: 未知' && d.name !== '权属: 未知' && d.name !== '用途: 未知' && 
+                               d.name !== '结构: 未知' && d.name !== '建筑: 未知' && d.value >= 0)
+                    .sort((a, b) => b.value - a.value)
+                    .slice(0, 10);
+                    console.log('浏览次数数据:', viewData);
+                    if (viewData.length === 0) {
+                        return { title: { text: '无有效浏览数据', left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: { ...commonTooltip, formatter: '{b}: {c} 次' },
+                        xAxis: { 
+                            type: 'category',
+                            data: viewData.map(d => d.name),
+                            name: '类别',
+                            nameLocation: 'middle',
+                            nameGap: 25,
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', rotate: 45, interval: 0, fontSize: 10 },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '浏览次数',
+                            nameTextStyle: { color: '#e0f7ff' },
+                            axisLabel: { color: '#e0f7ff' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: viewData.map(d => d.value),
+                            itemStyle: {
+                                color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#00d4ff' }, { offset: 1, color: '#1e90ff' }] },
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} 次',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron'
+                            },
+                            barWidth: '40%'
+                        }]
+                    };
+                case 'trend':
+                    const priceMetric = document.getElementById('price-metric-select').value;
+                    let trendData = [];
+                    const districts = districtData.districts.filter(d => d[priceMetric === 'price' ? 'priceByDate' : 'listPriceByDate']);
+                    // 获取所有日期并排序
+                    const allDates = [...new Set(districts.flatMap(d => 
+                        Object.keys(d[priceMetric === 'price' ? 'priceByDate' : 'listPriceByDate'])
+                    ))].sort();
+                    // 为每个区域准备数据
+                    trendData = districts.map(district => ({
+                        name: district.name,
+                        type: 'line',
+                        showSymbol: false,
+                        data: allDates.map(date => {
+                            const dateData = district[priceMetric === 'price' ? 'priceByDate' : 'listPriceByDate'][date];
+                            return dateData && dateData.count > 0 ? 
+                                [date, (dateData.sum / dateData.count).toFixed(2)] : 
+                                [date, null];
+                        })
+                    }));
+                    if (trendData.length === 0) {
+                        return { 
+                            title: { 
+                                text: '无有效时间趋势数据', 
+                                left: 'center', 
+                                top: 'center', 
+                                textStyle: { color: '#e0f7ff' } 
+                            } 
+                        };
+                    }
+                    return {
+                        title: {
+                            ...commonTooltip.title,
+                            subtext: '使用下方滑块选择时间范围',
+                            subtextStyle: { color: '#e0f7ff' }
+                        },
+                        tooltip: {
+                            ...commonTooltip,
+                            trigger: 'axis',
+                            formatter: function(params) {
+                                let result = params[0].axisValue + '<br/>';
+                                params.forEach(param => {
+                                    if (param.value[1] !== null) {
+                                        result += param.marker + param.seriesName + ': ' + 
+                                            param.value[1] + ' 万<br/>';
+                                    }
+                                });
+                                return result;
+                            }
+                        },
+                        legend: {
+                            data: trendData.map(d => d.name),
+                            textStyle: { color: '#e0f7ff' },
+                            type: 'scroll',
+                            pageTextStyle: { color: '#e0f7ff' }
+                        },
+                        xAxis: {
+                            type: 'time',
+                            axisLabel: { 
+                                color: '#e0f7ff',
+                                formatter: '{yyyy}/{MM}/{dd}'
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: priceMetric === 'price' ? '平均成交价（万）' : '平均挂牌价（万）',
+                            nameTextStyle: { color: '#e0f7ff' },
+                            axisLabel: { color: '#e0f7ff' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        dataZoom: [{
+                            type: 'slider',
+                            show: true,
+                            xAxisIndex: [0],
+                            bottom: 10,
+                            height: 20,
+                            borderColor: '#00d4ff',
+                            backgroundColor: 'rgba(0, 20, 60, 0.7)',
+                            fillerColor: 'rgba(0, 212, 255, 0.2)',
+                            handleStyle: { color: '#00d4ff' },
+                            textStyle: { color: '#e0f7ff' },
+                            start: 0,
+                            end: 100,
+                            rangeMode: ['value', 'value']
+                        }, {
+                            type: 'inside',
+                            xAxisIndex: [0]
+                        }],
+                        series: trendData
+                    };
+                case 'volume':
+                    // 按日期统计挂牌和成交数量
+                    const dateStats = {};
+                    rawData.forEach(row => {
+                        const date = row['成交日期']?.trim();
+                        const listDate = row['挂牌时间']?.trim();
+                        if (date && date !== '未知') {
+                            dateStats[date] = dateStats[date] || { deal: 0, list: 0 };
+                            dateStats[date].deal += 1;
+                        }
+                        if (listDate && listDate !== '未知') {
+                            dateStats[listDate] = dateStats[listDate] || { deal: 0, list: 0 };
+                            dateStats[listDate].list += 1;
+                        }
+                    });
+                    const dates = Object.keys(dateStats).sort();
+                    const dealData = dates.map(date => [date, dateStats[date].deal]);
+                    const listData = dates.map(date => [date, dateStats[date].list]);
+                    return {
+                        title: {
+                            ...commonTooltip.title,
+                            subtext: '使用下方滑块选择时间范围',
+                            subtextStyle: { color: '#e0f7ff' }
+                        },
+                        tooltip: {
+                            ...commonTooltip,
+                            trigger: 'axis',
+                            formatter: function(params) {
+                                return params[0].axisValue + '<br/>' + 
+                                       params.map(param => 
+                                           param.marker +  
+                                           (param.seriesName === 'deal' ? '成交: ' : '挂牌: ') + 
+                                           param.value[1] + ' 套'
+                                       ).join('<br/>');
+                            }
+                        },
+                        legend: {
+                            data: ['成交量', '挂牌量'],
+                            textStyle: { color: '#e0f7ff' }
+                        },
+                        xAxis: {
+                            type: 'time',
+                            axisLabel: { 
+                                color: '#e0f7ff',
+                                formatter: '{yyyy}/{MM}/{dd}'
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '数量（套）',
+                            nameTextStyle: { color: '#e0f7ff' },
+                            axisLabel: { color: '#e0f7ff' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        dataZoom: [{
+                            type: 'slider',
+                            show: true,
+                            xAxisIndex: [0],
+                            bottom: 10,
+                            height: 20,
+                            borderColor: '#00d4ff',
+                            backgroundColor: 'rgba(0, 20, 60, 0.7)',
+                            fillerColor: 'rgba(0, 212, 255, 0.2)',
+                            handleStyle: { color: '#00d4ff' },
+                            textStyle: { color: '#e0f7ff' },
+                            start: 0,
+                            end: 100,
+                            rangeMode: ['value', 'value']
+                        }, {
+                            type: 'inside',
+                            xAxisIndex: [0]
+                        }],
+                        series: [{
+                            name: '成交量',
+                            type: 'line',
+                            smooth: true,
+                            data: dealData,
+                            itemStyle: { color: '#00d4ff' }
+                        }, {
+                            name: '挂牌量',
+                            type: 'line',
+                            smooth: true,
+                            data: listData,
+                            itemStyle: { color: '#1e90ff' },
+                        }]
+                    };
+                case 'priceAdjust':
+                    const adjustType = document.getElementById('price-adjust-type-select').value;
+                    let adjustData = [];
+                    if (adjustType === 'district') {
+                        adjustData = districtData.districts
+                            .filter(d => d.count > 0)
+                            .map(d => ({
+                                name: d.name,
+                                avgAdjust: parseFloat(d.avgAdjust) || 0
+                            }))
+                            .filter(d => d.avgAdjust > 0);
+                        xAxisName = '地区';
+                    } else if (adjustType === 'community') {
+                        adjustData = districtData.communities
+                            .filter(c => c.count > 0)
+                            .map(c => ({
+                                name: c.name,
+                                avgAdjust: parseFloat(c.avgAdjust) || 0
+                            }))
+                            .filter(c => c.avgAdjust > 0)
+                            .sort((a, b) => b.avgAdjust - a.avgAdjust)
+                            .slice(0, 20);
+                        xAxisName = '小区';
+                    } else if (adjustType === 'block') {
+                        adjustData = districtData.blocks
+                            .filter(b => b.count > 0)
+                            .map(b => ({
+                                name: b.name,
+                                avgAdjust: parseFloat(b.avgAdjust) || 0
+                            }))
+                            .filter(b => b.avgAdjust > 0);
+                        xAxisName = '商圈';
+                    }
+                    console.log('调价次数数据:', { adjustType, adjustData });
+                    if (adjustData.length === 0) {
+                        return { title: { text: `无有效${xAxisName}调价次数数据`, left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: { ...commonTooltip, formatter: '{b}: {c} 次' },
+                        xAxis: { 
+                            type: 'category',
+                            data: adjustData.map(d => d.name),
+                            name: xAxisName,
+                            nameLocation: 'middle',
+                            nameGap: 30,
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { 
+                                color: '#e0f7ff', 
+                                rotate: adjustType === 'community' ? 45 : 0,
+                                interval: adjustType === 'community' ? 0 : 'auto',
+                                fontSize: adjustType === 'community' ? 10 : 12
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '平均调价次数',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: adjustData.map(d => d.avgAdjust),
+                            itemStyle: {
+                                color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#00d4ff' }, { offset: 1, color: '#1e90ff' }] },
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} 次',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron'
+                            },
+                            barWidth: adjustType === 'community' ? '40%' : '60%'
+                        }]
+                    };
+                case 'follows':
+                    const followType = document.getElementById('follows-type-select').value;
+                    let followData = [];
+                    if (followType === 'district') {
+                        followData = districtData.districts
+                            .filter(d => d.followCount > 0 && d.count > 0)
+                            .map(d => ({
+                                name: d.name,
+                                value: [
+                                    parseFloat(d.avgUnitPrice) || 0,  // x轴：均价
+                                    parseFloat(d.avgArea) || 0,      // y轴：面积
+                                    parseFloat(d.avgFollow) || 0,    // 气泡大小：关注度
+                                    d.count                          // 成交量
+                                ]
+                            }))
+                            .filter(d => d.value[0] > 0 && d.value[1] > 0 && d.value[2] > 0);
+                    } else if (followType === 'community') {
+                        followData = districtData.communities
+                            .filter(c => c.followCount > 0 && c.count > 0)
+                            .map(c => ({
+                                name: c.name,
+                                value: [
+                                    parseFloat(c.avgUnitPrice) || 0,
+                                    parseFloat(c.avgArea) || 0,
+                                    parseFloat(c.avgFollow) || 0,
+                                    c.count
+                                ]
+                            }))
+                            .filter(c => c.value[0] > 0 && c.value[1] > 0 && c.value[2] > 0)
+                            .sort((a, b) => b.value[2] - a.value[2])
+                            .slice(0, 50);
+                    } else if (followType === 'block') {
+                        followData = districtData.blocks
+                            .filter(b => b.followCount > 0 && b.count > 0)
+                            .map(b => ({
+                                name: b.name,
+                                value: [
+                                    parseFloat(b.avgUnitPrice) || 0,
+                                    parseFloat(b.avgArea) || 0,
+                                    parseFloat(b.avgFollow) || 0,
+                                    b.count
+                                ]
+                            }))
+                            .filter(b => b.value[0] > 0 && b.value[1] > 0 && b.value[2] > 0);
+                    }
+                    if (followData.length === 0) {
+                        return { title: { text: `无有效${followType === 'district' ? '地区' : followType === 'community' ? '小区' : '商圈'}关注度数据`, 
+                                         left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } };
+                    }
+                    return {
+                        tooltip: {
+                            ...commonTooltip,
+                            formatter: function(params) {
+                                return `${params.name}<br/>
+                                        均价: ${params.value[0].toFixed(2)}万/㎡<br/>
+                                        面积: ${params.value[1].toFixed(2)}㎡<br/>
+                                        关注度: ${params.value[2].toFixed(2)}人<br/>
+                                        成交量: ${params.value[3]}套`;
+                            }
+                        },
+                        grid: {
+                            left: '10%',
+                            right: '10%',
+                            top: '10%',
+                            bottom: '15%'
+                        },
+                        xAxis: {
+                            type: 'value',
+                            name: '均价(万/㎡)',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { 
+                                color: '#e0f7ff',
+                                formatter: '{value}'
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '平均面积(㎡)',
+                            nameTextStyle: { color: '#e0f7ff', fontFamily: 'Orbitron' },
+                            axisLabel: { 
+                                color: '#e0f7ff',
+                                formatter: '{value}'
+                            },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { lineStyle: { color: 'rgba(0, 183, 235, 0.2)' } }
+                        },
+                        series: [{
+                            type: 'scatter',
+                            data: followData,
+                            symbolSize: function(data) {
+                                return Math.sqrt(data[2]) * 2; // 根据关注度调整气泡大小
+                            },
+                            itemStyle: {
+                                color: function(params) {
+                                    const count = params.data.value[3];
+                                    return {
+                                        type: 'radial',
+                                        x: 0.5,
+                                        y: 0.5,
+                                        r: 0.5,
+                                        colorStops: [{
+                                            offset: 0,
+                                            color: '#00d4ff'
+                                        }, {
+                                            offset: 1,
+                                            color: 'rgba(0, 212, 255, 0.1)'
+                                        }]
+                                    };
+                                },
+                                borderColor: '#00d4ff',
+                                borderWidth: 1,
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            label: {
+                                show: true,
+                                formatter: '{b}',
+                                position: 'top',
+                                color: '#e0f7ff',
+                                fontFamily: 'Orbitron',
+                                fontSize: 10
+                            },
+                            emphasis: {
+                                label: {
+                                    show: true,
+                                    color: '#ffffff',
+                                    fontWeight: 'bold',
+                                },
+                                itemStyle: {
+                                    shadowBlur: 20
+                                }
+                            }
+                        }]
+                    };
+                case 'locationCluster':
+                    if (!districtData.locationData || districtData.locationData.length === 0) {
+                        return { 
+                            title: { text: '无有效地理位置数据', left: 'center', top: 'center', textStyle: { color: '#e0f7ff' } } 
+                        };
+                    }
+
+                    // 计算数据范围
+                    const minPrice = Math.min(...districtData.locationData.map(d => d.value[2]));
+                    const maxPrice = Math.max(...districtData.locationData.map(d => d.value[2]));
+
+                    return {
+                        tooltip: {
+                            ...commonTooltip,
+                            trigger: 'item',
+                            formatter: function(params) {
+                                return `${params.data.name}<br/>
+                                        所属区域: ${params.data.district}<br/>
+                                        经度: ${params.data.value[0].toFixed(6)}<br/>
+                                        纬度: ${params.data.value[1].toFixed(6)}<br/>
+                                        平均价格: ${params.data.value[2].toFixed(2)}万<br/>
+                                        房源数量: ${params.data.count}套`;
+                            }
+                        },
+                        visualMap: {
+                            show: true,
+                            type: 'continuous',
+                            min: minPrice,
+                            max: maxPrice,
+                            calculable: true,
+                            inRange: {
+                                color: ['#1e90ff', '#f4a460', '#ff4444']
+                            },
+                            textStyle: {
+                                color: '#e0f7ff'
+                            },
+                            right: 10,
+                            top: 10
+                        },
+                        xAxis: {
+                            type: 'value',
+                            name: '经度',
+                            nameTextStyle: { color: '#e0f7ff' },
+                            min: 121.2,
+                            max: 121.8,
+                            axisLabel: { color: '#e0f7ff' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { show: false }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '纬度',
+                            nameTextStyle: { color: '#e0f7ff' },
+                            min: 30.8,
+                            max: 31.5,
+                            axisLabel: { color: '#e0f7ff' },
+                            axisLine: { lineStyle: { color: '#00d4ff' } },
+                            splitLine: { show: false }
+                        },
+                        series: [{
+                            name: '房屋分布',
+                            type: 'scatter',
+                            data: districtData.locationData,
+                            symbolSize: function(data) {
+                                const count = data[3] || 1;
+                                return Math.sqrt(count) * 6;
+                            },
+                            itemStyle: {
+                                color: function(params) {
+                                    const price = params.data.value[2];
+                                    const ratio = (price - minPrice) / (maxPrice - minPrice);
+                                    return {
+                                        type: 'radial',
+                                        x: 0.5,
+                                        y: 0.5,
+                                        r: 0.5,
+                                        colorStops: [{
+                                            offset: 0,
+                                            color: ratio > 0.7 ? '#ff4444' : 
+                                                  ratio > 0.4 ? '#f4a460' : '#1e90ff'
+                                        }, {
+                                            offset: 1,
+                                            color: 'rgba(0, 212, 255, 0.1)'
+                                        }]
+                                    };
+                                },
+                                borderColor: '#00d4ff',
+                                borderWidth: 1,
+                                shadowColor: '#00d4ff',
+                                shadowBlur: 10
+                            },
+                            emphasis: {
+                                label: {
+                                    show: true,
+                                    formatter: function(params) {
+                                        return params.data.name;
+                                    },
+                                    color: '#fff',
+                                    position: 'top'
+                                },
+                                itemStyle: {
+                                    shadowBlur: 20,
+                                    borderColor: '#fff'
+                                }
+                            }
+                        }]
+                    };
+                default:
+                    return {};
+            }
+        }
+
+        // 加载地图和数据
+        async function loadData(data) {
+            if (!data || data.length === 0) {
+                document.getElementById('info').innerHTML = '无有效数据';
+                console.error('无有效数据');
+                return;
+            }
+            try {
+                const geoJson = await loadMapData();
+                echarts.registerMap('Shanghai', geoJson);
+                
+                // 清除旧数据
+                Object.values(chartInstances).forEach(chart => {
+                    chart.clear();
+                });
+                
+                // 处理数据
+                districtData = aggregateData(data);
+                
+                if (!districtData.districts || districtData.districts.length === 0) {
+                    document.getElementById('info').innerHTML = '无有效区域数据';
+                    console.warn('无有效区域数据，可能区域字段全为"未知"或空');
+                    return;
+                }
+
+                // 更新所有图表
+                console.log('开始更新图表...');
+                for (const type of Object.keys(chartInstances)) {
+                    try {
+                        if (chartInstances[type]) {
+                            console.log(`更新图表: ${type}`);
+                            const option = getChartOption(type);
+                            chartInstances[type].setOption(option, true);
+                        }
+                    } catch (err) {
+                        console.error(`更新图表 ${type} 失败:`, err);
+                    }
+                }
+
+                // 更新地图
+                mapChart.setOption(getMapOption(districtData));
+                
+                document.getElementById('info').innerHTML = '数据加载完成，请点击或悬停查看详情';
+                console.log('所有图表更新完成');
+                
+                // 在成功加载数据后初始化统计面板
+                if (districtData && districtData.districts.length > 0) {
+                    initStatsPanel();
+                }
+            } catch (error) {
+                console.error('数据加载失败:', error);
+                document.getElementById('info').innerHTML = '数据加载失败，请检查数据格式';
+            }
+        }
+
+        // 修改地图配置生成函数
+        function getMapOption(data) {
+            const defaultPrices = {
+                '浦东新区': { unitPrice: 5.00, totalPrice: 406.15, area: 79.81, volume: 51149 },
+                '长宁区': { unitPrice: 6.42, totalPrice: 513.32, area: 77.36, volume: 9927 },
+                '静安区': { unitPrice: 6.61, totalPrice: 488.38, area: 71.35, volume: 10555 },
+                '普陀区': { unitPrice: 5.34, totalPrice: 384.13, area: 69.15, volume: 13293 },
+                '虹口区': { unitPrice: 5.90, totalPrice: 410.34, area: 66.68, volume: 6018 },
+                '徐汇区': { unitPrice: 6.87, totalPrice: 468.65, area: 67.45, volume: 13623 },
+                '黄浦区': { unitPrice: 8.24, totalPrice: 715.06, area: 85.02, volume: 4987 },
+                '闵行区': { unitPrice: 4.46, totalPrice: 384.52, area: 84.33, volume: 30877 },
+                '杨浦区': { unitPrice: 5.63, totalPrice: 360.14, area: 61.96, volume: 13199 },
+                '嘉定区': { unitPrice: 3.46, totalPrice: 280.23, area: 80.61, volume: 13597 },
+                '宝山区': { unitPrice: 4.08, totalPrice: 313.64, area: 76.46, volume: 20863 },
+                '松江区': { unitPrice: 3.26, totalPrice: 314.73, area: 96.43, volume: 14370 },
+                '青浦区': { unitPrice: 2.98, totalPrice: 311.03, area: 100.46, volume: 5455 },
+                '奉贤区': { unitPrice: 2.22, totalPrice: 181.30, area: 82.94, volume: 6539 },
+                '金山区': { unitPrice: 1.60, totalPrice: 125.07, area: 77.27, volume: 535 },
+                '崇明区': { unitPrice: 1.33, totalPrice: 92.45, area: 65.04, volume: 40 }
+            };
+
+            const shanghaiData = Object.entries(defaultPrices).map(([name, values]) => ({
+                name,
+                value: values.unitPrice,
+                avgPrice: values.totalPrice,
+                population: `${values.volume} 套`,
+                area: `${values.area} ㎡`
+            }));
+
+            const realValues = Object.values(defaultPrices).map(p => p.unitPrice);
+            const minValue = Math.min(...realValues);
+            const maxValue = Math.max(...realValues);
+
+            return {
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(0, 20, 60, 0.8)',
+                    borderColor: '#00d4ff',
+                    borderWidth: 1,
+                    textStyle: {
+                        color: '#e0f7ff',
+                        fontFamily: 'Orbitron'
+                    },
+                    formatter: function(params) {
+                        const data = shanghaiData.find(item => item.name === params.name);
+                        if (!data) return params.name;
+                        return `${params.name}<br>` +
+                               `成交量: ${data.population}<br>` +
+                               `均价: ${data.value.toFixed(2)}万/㎡<br>` +
+                               `成交价: ${data.avgPrice.toFixed(2)}万<br>` +
+                               `面积: ${data.area}`;
+                    }
+                },
+                visualMap: {
+                    show: true,
+                    type: 'continuous',
+                    min: minValue,
+                    max: maxValue,
+                    inRange: {
+                        color: ['#104e8b', '#1e90ff', '#00d4ff', '#87cefa', '#b0e2ff']
+                    },
+                    textStyle: {
+                        color: '#e0f7ff',
+                        fontFamily: 'Orbitron'
+                    },
+                    left: 'left',
+                    bottom: '10%',
+                    calculable: true,
+                    formatter: value => value.toFixed(2) + ' 万/㎡'
+                },
+                series: [{
+                    name: '上海行政区',
+                    type: 'map',
+                    map: 'Shanghai',
+                    roam: true,
+                    label: {
+                        show: true,
+                        position: 'inside',
+                        formatter: '{b}', // 只显示区域名称
+                        color: '#fff',
+                        fontSize: 16,
+                        fontWeight: 'bold',
+                        textShadowColor: '#000',
+                        textShadowBlur: 2,
+                        textShadowOffsetX: 1,
+                        textShadowOffsetY: 1,
+                        backgroundColor: 'transparent', // 移除背景
+                        padding: [5, 10],
+                        borderRadius: 4,
+                        lineHeight: 24
+                    },
+                    itemStyle: {
+                        areaColor: '#104e8b',
+                        borderColor: '#00b7eb',
+                        borderWidth: 1.5,
+                        shadowColor: 'rgba(0, 183, 235, 0.5)',
+                        shadowBlur: 10
+                    },
+                    emphasis: {
+                        label: {
+                            show: true,
+                            backgroundColor: 'rgba(0, 212, 255, 0.3)',
+                        },
+                        itemStyle: {
+                            areaColor: '#00d4ff',
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        }
+                    },
+                    data: shanghaiData
+                }]
+            };
+        }
+
+        // 修改地图事件处理
+        function initializeMapEvents() {
+            mapChart.on('mouseover', function(params) {
+                if (!districtData) return;
+                const district = districtData.districts.find(d => d.name === params.name);
+                if (!district) return;
+                
+                document.getElementById('info').innerHTML = `
+                    <b>${params.name} 房产概况</b><br/>
+                    成交量: ${district.count} 套<br/>
+                    均价: ${district.avgUnitPrice} 万/㎡<br/>
+                    平均总价: ${district.avgPrice} 万<br/>
+                    平均面积: ${district.avgArea} ㎡<br/>
+                    平均周期: ${district.avgCycleDays} 天
+                `;
+            });
+
+            mapChart.on('mouseout', function() {
+                document.getElementById('info').innerHTML = '请上传 CSV 文件并悬停行政区';
+            });
+
+            mapChart.on('click', function(params) {
+                mapChart.dispatchAction({
+                    type: 'mapSelect',
+                    name: params.name
+                });
+                mapChart.setOption({
+                    series: [{
+                        zoom: 1.2
+                    }]
+                });
+            });
+        }
+
+        // 初始化地图事件
+        initializeMapEvents();
+
+        // 添加窗口调整大小防抖处理
+        function debounce(func, wait) {
+            let timeout;
+            return function() {
+                const context = this;
+                const args = arguments;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), wait);
+            };
+        }
+
+        // 优化窗口大小变化处理
+        window.addEventListener('resize', debounce(() => {
+            console.log('调整图表大小');
+            Object.values(chartInstances).forEach(chart => {
+                chart && chart.resize();
+            });
+            mapChart && mapChart.resize();
+        }, 250));
+
+        // 在 script 标签内添加这个颜色计算函数
+        function getColorByPrice(price) {
+            // 定义价格区间和对应的颜色
+            const priceRanges = [
+                { max: 300, color: '#313695' },
+                { max: 400, color: '#4575b4' },
+                { max: 500, color: '#74add1' },
+                { max: 600, color: '#abd9e9' },
+                { max: 800, color: '#fdae61' },
+                { max: 1000, color: '#f46d43' },
+                { max: Infinity, color: '#d73027' }
+            ];
+            // 找到对应的颜色
+            for (const range of priceRanges) {
+                if (price <= range.max) {
+                    return range.color;
+                }
+            }
+            return '#999'; // 默认颜色
+        }
+
+        // 修改颜色计算函数
+        function getAreaColor(price) {
+            if (price <= 0) return '#104e8b';
+            // 使用渐变色计算
+            const maxPrice = 1000;
+            const minPrice = 0;
+            const ratio = Math.min(1, Math.max(0, (price - minPrice) / (maxPrice - minPrice)));
+            // 在三个颜色之间进行插值
+            if (ratio <= 0.5) {
+                // 在 #104e8b 和 #1e90ff 之间插值
+                return `rgba(${16 + ratio * 2 * (30 - 16)}, ${78 + ratio * 2 * (144 - 78)}, ${139 + ratio * 2 * (255 - 139)}, 1)`;
+            } else {
+                // 在 #1e90ff 和 #00d4ff 之间插值
+                const r2 = (ratio - 0.5) * 2;
+                return `rgba(${30 + r2 * (0 - 30)}, ${144 + r2 * (212 - 144)}, ${255 + r2 * (255 - 255)}, 1)`;
+            }
+        }
+
+        // 在 script 标签末尾添加颜色计算函数
+        function getAreaColor(price) {
+            if (price <= 0) return '#999';
+            // 根据价格区间返回不同深浅的颜色
+            if (price > 1000) return '#1B0F4B';  // 深紫色 >1000万
+            if (price > 800) return '#2D1B85';   // 紫色 800-1000万
+            if (price > 600) return '#3B33B3';   // 蓝紫色 600-800万
+            if (price > 500) return '#4158D0';   // 深蓝色 500-600万
+            if (price > 400) return '#4B7BE5';   // 蓝色 400-500万
+            if (price > 300) return '#56A5FA';   // 浅蓝色 300-400万
+            return '#73D5FF';                    // 最浅蓝色 <=300万
+        }
+
+        // 添加自动滚动展示功能
+        function initStatsPanel() {
+            const statsContent = document.getElementById('statsContent');
+            
+            // 检查数据有效性
+            if (!statsContent) {
+                console.error('统计面板容器元素无效');
+                return;
+            }
+
+            // 准备统计项
+            const statItems = [
+                {
+                    label: '平均建筑面积之最',
+                    value: `最大：青浦，100.46㎡<br/>最小：崇明，65.04㎡`
+                },
+                {
+                    label: '平均成交价之最',
+                    value: `最高：黄浦，715.06万<br/>最低：崇明，92.45万`
+                },
+                {
+                    label: '极端成交价格',
+                    value: `最高：10800万<br/>最低：0万（真实0元购）`
+                },
+                {
+                    label: '平均成交周期',
+                    value: `最快：金山，132.99天<br/>最慢：黄浦，590.73天`
+                },
+                {
+                    label: '最受欢迎户型',
+                    value: `两室一厅一厨一卫<br/>成交：57500套`
+                },
+                {
+                    label: '成交量之最',
+                    value: `最大：浦东，51149套(23.86%)<br/>最小：崇明，40套(0.02%)`
+                },
+                {
+                    label: '每平米均价之最',
+                    value: `最贵：黄浦，8.24万/㎡<br/>最便：崇明，1.33万/㎡`
+                },
+                {
+                    label: '房龄交易特点',
+                    value: `最多：26年(94年)，13844套<br/>最老：1911年（三朝老臣，辛亥同年），2套`
+                },
+                {
+                    label: '价格变动最频繁',
+                    value: `金山区<br/>平均1.62次调价`
+                },
+                {
+                    label: '最受关注区域',
+                    value: `黄浦区<br/>平均26.39人关注/套`
+                },
+                {
+                    label: '最热门交易区域',
+                    value: `区域：浦东<br/>小区：上海康城<br/>商圈：金桥`
+                },
+                {
+                    label: '浏览偏好Top3',
+                    value: `普通住宅：2.6亿次<br/>商品房：2.5亿次<br/>板楼：2.4亿次`
+                },
+                {
+                    label: '地理分布特点',
+                    value: `自西向东越来越稀疏<br/>自南向北越来越密集`
+                },
+                {
+                    label: '交易价格高峰',
+                    value: `2017年到2018年`
+                },
+                {
+                    label: '交易数量高峰',
+                    value: `2015年到2016年`
+                },
+                {
+                    label: '备注',
+                    value: `小区信息由于太多，只展示最大的前20条`
+                }
+            ];
+
+            // 修改每组显示的数量为3
+            const itemsPerGroup = 3;  // 从5改为3
+            const totalGroups = Math.ceil(statItems.length / itemsPerGroup);
+            
+            // 将统计项分组
+            const groups = [];
+            for (let i = 0; i < totalGroups; i++) {
+                groups.push(statItems.slice(i * itemsPerGroup, (i + 1) * itemsPerGroup));
+            }
+
+            // 创建分组的HTML元素
+            const groupsHtml = groups.map((group, groupIndex) => `
+                <div class="stats-group ${groupIndex === 0 ? 'active' : ''}" data-group="${groupIndex}">
+                    ${group.map((item, itemIndex) => `
+                        <div class="stats-item active">
+                            <div class="label">${item.label}</div>
+                            <div class="value">${item.value}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+
+            // 更新面板内容
+            statsContent.innerHTML = groupsHtml;
+
+            // 自动切换分组
+            let currentGroupIndex = 0;
+            const statsGroups = statsContent.getElementsByClassName('stats-group');
+            
+            if (statsGroups.length > 1) {
+                setInterval(() => {
+                    statsGroups[currentGroupIndex].classList.remove('active');
+                    currentGroupIndex = (currentGroupIndex + 1) % statsGroups.length;
+                    statsGroups[currentGroupIndex].classList.add('active');
+                }, 5000); // 5秒切换一次
+            }
+        }
+    </script>
+</body>
+</html>
